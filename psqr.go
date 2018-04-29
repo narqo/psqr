@@ -1,10 +1,11 @@
+// Package psqr implements P-Square algorithm for estimating quantiles without storing observations.
 package psqr
 
 import (
 	"sort"
 )
 
-// P-square algorithm maitains five markers that store points.
+// P-square maitains five markers that store points.
 const nMarkers = 5
 
 // Quantile represents an estimated p-quantile of a stream of observations.
