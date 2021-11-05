@@ -1,3 +1,3 @@
-module github.com/narqo/psqr
+module github.com/exaring/psqr
 
 go 1.17

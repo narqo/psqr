@@ -3,7 +3,7 @@ package psqr_test
 import (
 	"testing"
 
-	"github.com/narqo/psqr"
+	"github.com/exaring/psqr"
 )
 
 func TestQuantileMarshalling(t *testing.T) {

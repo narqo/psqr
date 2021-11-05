@@ -1,7 +1,6 @@
 # psqr
 
-[![Build Status](https://travis-ci.org/narqo/psqr.svg?branch=master)](https://travis-ci.org/narqo/psqr)
-[![GoDoc](https://godoc.org/github.com/narqo/psqr?status.svg)](https://godoc.org/github.com/narqo/psqr)
+[![GoDoc](https://godoc.org/github.com/exaring/psqr?status.svg)](https://godoc.org/github.com/exaring/psqr)
 
 Go implementation of [The P-Square Algorithm for Dynamic Calculation of Quantiles and Histograms Without Storing Observations][1].
 
