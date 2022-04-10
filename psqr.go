@@ -10,17 +10,23 @@ const nMarkers = 5
 
 // Quantile represents an estimated p-quantile of a stream of observations.
 type Quantile struct {
-	p      float64
-	filled bool
+	// data is contains the actual information used for quantile calculations. It is unexported to avoid accidental
+	// modification, while itself containing exported fields, allowing (un)marshalling.
+	data *data
+}
+
+type data struct {
+	P      float64
+	Filled bool
 
 	// marker positions, 1..nMarkers
-	pos [nMarkers]int
+	Pos [nMarkers]int
 	// desired marker positions
-	npos [nMarkers]float64
+	NPos [nMarkers]float64
 	// increament in desired marker positions
-	dn [nMarkers]float64
+	DN [nMarkers]float64
 	// marker heights that store observations
-	heights []float64
+	Heights []float64
 }
 
 // NewQuantile returns new p-quantile.
@@ -29,8 +35,10 @@ func NewQuantile(p float64) *Quantile {
 		panic("p-quantile is out of range")
 	}
 	q := &Quantile{
-		p:       p,
-		heights: make([]float64, 0, nMarkers),
+		data: &data{
+			P:       p,
+			Heights: make([]float64, 0, nMarkers),
+		},
 	}
 	q.Reset()
 	return q
@@ -38,20 +46,20 @@ func NewQuantile(p float64) *Quantile {
 
 // Reset resets the quantile.
 func (q *Quantile) Reset() {
-	p := q.p
-	q.filled = false
-	q.heights = q.heights[:0]
-	for i := 0; i < len(q.pos); i++ {
-		q.pos[i] = i
+	p := q.data.P
+	q.data.Filled = false
+	q.data.Heights = q.data.Heights[:0]
+	for i := 0; i < len(q.data.Pos); i++ {
+		q.data.Pos[i] = i
 	}
-	q.npos = [...]float64{
+	q.data.NPos = [...]float64{
 		0,
 		2 * p,
 		4 * p,
 		2 + 2*p,
 		4,
 	}
-	q.dn = [...]float64{
+	q.data.DN = [...]float64{
 		0,
 		p / 2,
 		p,
@@ -62,57 +70,56 @@ func (q *Quantile) Reset() {
 
 // Append appends v to the stream of observations.
 func (q *Quantile) Append(v float64) {
-	if len(q.heights) != nMarkers {
+	if len(q.data.Heights) != nMarkers {
 		// no required number of observations has been appended yet
-		q.heights = append(q.heights, v)
+		q.data.Heights = append(q.data.Heights, v)
 		return
 	}
-	if !q.filled {
-		q.filled = true
-		sort.Float64s(q.heights)
+	if !q.data.Filled {
+		q.data.Filled = true
+		sort.Float64s(q.data.Heights)
 	}
 	q.append(v)
-
 }
 
 func (q *Quantile) append(v float64) {
-	l := len(q.heights) - 1
+	l := len(q.data.Heights) - 1
 
 	k := -1
-	if v < q.heights[0] {
+	if v < q.data.Heights[0] {
 		k = 0
-		q.heights[0] = v
-	} else if q.heights[l] <= v {
+		q.data.Heights[0] = v
+	} else if q.data.Heights[l] <= v {
 		k = l - 1
-		q.heights[l] = v
+		q.data.Heights[l] = v
 	} else {
 		for i := 1; i <= l; i++ {
-			if q.heights[i-1] <= v && v < q.heights[i] {
+			if q.data.Heights[i-1] <= v && v < q.data.Heights[i] {
 				k = i - 1
 				break
 			}
 		}
 	}
 
-	for i := 0; i < len(q.pos); i++ {
+	for i := 0; i < len(q.data.Pos); i++ {
 		// increment positions greater than k
 		if i > k {
-			q.pos[i]++
+			q.data.Pos[i]++
 		}
 		// update desired positions for all markers
-		q.npos[i] += q.dn[i]
+		q.data.NPos[i] += q.data.DN[i]
 	}
 
 	q.adjustHeights()
 }
 
 func (q *Quantile) adjustHeights() {
-	for i := 1; i < len(q.heights)-1; i++ {
-		n := q.pos[i]
-		np1 := q.pos[i+1]
-		nm1 := q.pos[i-1]
+	for i := 1; i < len(q.data.Heights)-1; i++ {
+		n := q.data.Pos[i]
+		np1 := q.data.Pos[i+1]
+		nm1 := q.data.Pos[i-1]
 
-		d := q.npos[i] - float64(n)
+		d := q.data.NPos[i] - float64(n)
 
 		if (d >= 1 && np1-n > 1) || (d <= -1 && nm1-n < -1) {
 			if d >= 0 {
@@ -121,45 +128,45 @@ func (q *Quantile) adjustHeights() {
 				d = -1
 			}
 
-			h := q.heights[i]
-			hp1 := q.heights[i+1]
-			hm1 := q.heights[i-1]
+			h := q.data.Heights[i]
+			hp1 := q.data.Heights[i+1]
+			hm1 := q.data.Heights[i-1]
 
 			// try adjusting height using P-square formula
 			hi := parabolic(d, hp1, h, hm1, float64(np1), float64(n), float64(nm1))
 
 			if hm1 < hi && hi < hp1 {
-				q.heights[i] = hi
+				q.data.Heights[i] = hi
 			} else {
 				// use linear formula
-				hd := q.heights[i+int(d)]
-				nd := q.pos[i+int(d)]
-				q.heights[i] = h + d*(hd-h)/float64(nd-n)
+				hd := q.data.Heights[i+int(d)]
+				nd := q.data.Pos[i+int(d)]
+				q.data.Heights[i] = h + d*(hd-h)/float64(nd-n)
 			}
 
-			q.pos[i] += int(d)
+			q.data.Pos[i] += int(d)
 		}
 	}
 }
 
 // Value returns the current estimate of p-quantile.
 func (q *Quantile) Value() float64 {
-	if !q.filled {
+	if !q.data.Filled {
 		// a fast path when not enought observations has been stored yet
-		l := len(q.heights)
+		l := len(q.data.Heights)
 		switch l {
 		case 0:
 			return 0
 		case 1:
-			return q.heights[0]
+			return q.data.Heights[0]
 		}
-		sort.Float64s(q.heights)
-		rank := int(q.p * float64(l))
-		return q.heights[rank]
+		sort.Float64s(q.data.Heights)
+		rank := int(q.data.P * float64(l))
+		return q.data.Heights[rank]
 	}
 	// if initialised with nMarkers observations third height stores current
 	// estimate of p-quantile
-	return q.heights[2]
+	return q.data.Heights[2]
 }
 
 // calculates the adjustment of height using  piecewise parabolic (PP) prediction formula.
